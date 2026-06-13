@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversor PDF para DOCX (Robusto)</title>
+    <title>Conversor PDF para DOCX Pro</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     
-    <script src="https://unpkg.com/docx@8.2.2/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.umd.min.js"></script>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
@@ -121,16 +121,15 @@
 </div>
 
 <script>
-    // Inicialização segura das dependências externas
+    // Configuração inicial do Worker do PDF.js
     window.onload = function() {
         const status = document.getElementById('status-message');
         try {
             if (typeof pdfjsLib === 'undefined') {
-                throw new Error("Biblioteca PDF.js não carregou. Verifique sua conexão com a internet.");
+                throw new Error("A biblioteca PDF.js não carregou corretamente.");
             }
-            // Configura o worker apontando para uma URL CDN estável
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-            console.log("PDF.js inicializado com sucesso.");
+            console.log("PDF.js Pronto.");
         } catch (e) {
             status.style.color = "#ef4444";
             status.innerText = e.message;
@@ -158,13 +157,13 @@
         if (input.files.length === 0) return;
 
         status.style.color = "#0284c7";
-        status.innerText = "Iniciando a leitura do arquivo...";
+        status.innerText = "Iniciando leitura do PDF...";
         
         try {
-            // Verifica se o Objeto docx está presente na janela global do navegador
+            // Mapeamento compatível com a distribuição UMD (Universal Module Definition)
             const docxLib = window.docx;
-            if (!docxLib || typeof docxLib.Paragraph === 'undefined') {
-                throw new Error("A biblioteca DOCX.js falhou ao inicializar ou está bloqueada.");
+            if (!docxLib) {
+                throw new Error("A biblioteca DOCX.js não está disponível no navegador.");
             }
 
             const file = input.files[0];
@@ -173,8 +172,6 @@
             reader.onload = async function () {
                 try {
                     const typedarray = new Uint8Array(this.result);
-                    
-                    // Carrega o documento PDF
                     const loadingTask = pdfjsLib.getDocument({ data: typedarray });
                     const pdf = await loadingTask.promise;
                     const totalPaginas = pdf.numPages;
@@ -229,12 +226,12 @@
                     if (docxParagraphs.length === 0) {
                         docxParagraphs.push(
                             new docxLib.Paragraph({
-                                children: [new docxLib.TextRun({ text: "Nenhum texto pôde ser extraído deste PDF.", size: 24 })]
+                                children: [new docxLib.TextRun({ text: "Nenhum texto estruturado encontrado.", size: 24 })]
                             })
                         );
                     }
 
-                    status.innerText = "Criando estrutura do documento Word...";
+                    status.innerText = "Reconstruindo arquivo Word...";
 
                     const doc = new docxLib.Document({
                         sections: [{
@@ -244,7 +241,6 @@
                     });
 
                     docxLib.Packer.toBlob(doc).then(blob => {
-                        // Utiliza o salvamento nativo ou fallback via FileSaver
                         if (window.saveAs) {
                             window.saveAs(blob, file.name.replace(".pdf", "") + ".docx");
                         } else {
@@ -258,16 +254,16 @@
                     });
 
                 } catch (err) {
-                    console.error("Erro no processamento interno:", err);
+                    console.error(err);
                     status.style.color = "#ef4444";
-                    status.innerText = `Erro durante a conversão: ${err.message || err}`;
+                    status.innerText = `Erro de processamento: ${err.message || err}`;
                 }
             };
 
             reader.readAsArrayBuffer(file);
 
         } catch (error) {
-            console.error("Erro na inicialização:", error);
+            console.error(error);
             status.style.color = "#ef4444";
             status.innerText = `Falha ao iniciar: ${error.message}`;
         }
