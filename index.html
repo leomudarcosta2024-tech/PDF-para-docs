@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor PDF para DOCX (Robusto)</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    
+    <script src="https://unpkg.com/docx@8.2.2/build/index.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-hover: #0369a1;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #334155;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        p {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-bottom: 25px;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--border);
+            padding: 30px 20px;
+            border-radius: 8px;
+            background: #fafafa;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.2s;
+        }
+
+        .dropzone:hover {
+            border-color: var(--primary);
+            background: #f0f9ff;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        button {
+            width: 100%;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 15px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #0284c7;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Conversor PDF para DOCX</h1>
+    <p>Extraia o conteúdo do seu PDF e converta em um documento Word de forma local e segura.</p>
+
+    <div class="dropzone" onclick="document.getElementById('pdf-file').click()">
+        <span id="file-label">📥 Clique aqui para selecionar o PDF</span>
+        <input type="file" id="pdf-file" accept="application/pdf" onchange="atualizarNomeArquivo()">
+    </div>
+
+    <button id="btn-convert" onclick="converterPdfParaDocx()" disabled>Converter e Baixar (.docx)</button>
+    <div id="status-message" class="status"></div>
+</div>
+
+<script>
+    // Inicialização segura das dependências externas
+    window.onload = function() {
+        const status = document.getElementById('status-message');
+        try {
+            if (typeof pdfjsLib === 'undefined') {
+                throw new Error("Biblioteca PDF.js não carregou. Verifique sua conexão com a internet.");
+            }
+            // Configura o worker apontando para uma URL CDN estável
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+            console.log("PDF.js inicializado com sucesso.");
+        } catch (e) {
+            status.style.color = "#ef4444";
+            status.innerText = e.message;
+        }
+    };
+
+    function atualizarNomeArquivo() {
+        const input = document.getElementById('pdf-file');
+        const label = document.getElementById('file-label');
+        const btn = document.getElementById('btn-convert');
+
+        if (input.files.length > 0) {
+            label.innerText = `📄 ${input.files[0].name}`;
+            btn.disabled = false;
+        } else {
+            label.innerText = "📥 Clique aqui para selecionar o PDF";
+            btn.disabled = true;
+        }
+    }
+
+    async function converterPdfParaDocx() {
+        const input = document.getElementById('pdf-file');
+        const status = document.getElementById('status-message');
+        
+        if (input.files.length === 0) return;
+
+        status.style.color = "#0284c7";
+        status.innerText = "Iniciando a leitura do arquivo...";
+        
+        try {
+            // Verifica se o Objeto docx está presente na janela global do navegador
+            const docxLib = window.docx;
+            if (!docxLib || typeof docxLib.Paragraph === 'undefined') {
+                throw new Error("A biblioteca DOCX.js falhou ao inicializar ou está bloqueada.");
+            }
+
+            const file = input.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async function () {
+                try {
+                    const typedarray = new Uint8Array(this.result);
+                    
+                    // Carrega o documento PDF
+                    const loadingTask = pdfjsLib.getDocument({ data: typedarray });
+                    const pdf = await loadingTask.promise;
+                    const totalPaginas = pdf.numPages;
+                    
+                    let docxParagraphs = [];
+
+                    for (let i = 1; i <= totalPaginas; i++) {
+                        status.innerText = `Processando página ${i} de ${totalPaginas}...`;
+                        
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        
+                        let linhaAtualY = null;
+                        let textoDaLinha = "";
+
+                        for (const item of textContent.items) {
+                            const coordenadaY = Math.round(item.transform[5]);
+
+                            if (linhaAtualY !== null && Math.abs(linhaAtualY - coordenadaY) > 6) {
+                                if (textoDaLinha.trim() !== "") {
+                                    docxParagraphs.push(
+                                        new docxLib.Paragraph({
+                                            children: [new docxLib.TextRun({ text: textoDaLinha.trim(), size: 24 })],
+                                            spacing: { after: 120 }
+                                        })
+                                    );
+                                }
+                                textoDaLinha = "";
+                            }
+
+                            linhaAtualY = coordenadaY;
+                            textoDaLinha += item.str + " ";
+                        }
+
+                        if (textoDaLinha.trim() !== "") {
+                            docxParagraphs.push(
+                                new docxLib.Paragraph({
+                                    children: [new docxLib.TextRun({ text: textoDaLinha.trim(), size: 24 })]
+                                })
+                            );
+                        }
+
+                        if (i < totalPaginas && docxParagraphs.length > 0) {
+                            docxParagraphs.push(
+                                new docxLib.Paragraph({
+                                    children: [new docxLib.TextRun({ text: "", pageBreak: true })]
+                                })
+                            );
+                        }
+                    }
+
+                    if (docxParagraphs.length === 0) {
+                        docxParagraphs.push(
+                            new docxLib.Paragraph({
+                                children: [new docxLib.TextRun({ text: "Nenhum texto pôde ser extraído deste PDF.", size: 24 })]
+                            })
+                        );
+                    }
+
+                    status.innerText = "Criando estrutura do documento Word...";
+
+                    const doc = new docxLib.Document({
+                        sections: [{
+                            properties: {},
+                            children: docxParagraphs,
+                        }],
+                    });
+
+                    docxLib.Packer.toBlob(doc).then(blob => {
+                        // Utiliza o salvamento nativo ou fallback via FileSaver
+                        if (window.saveAs) {
+                            window.saveAs(blob, file.name.replace(".pdf", "") + ".docx");
+                        } else {
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(blob);
+                            link.download = file.name.replace(".pdf", "") + ".docx";
+                            link.click();
+                        }
+                        status.style.color = "#059669";
+                        status.innerText = "✨ Sucesso! Arquivo Word baixado.";
+                    });
+
+                } catch (err) {
+                    console.error("Erro no processamento interno:", err);
+                    status.style.color = "#ef4444";
+                    status.innerText = `Erro durante a conversão: ${err.message || err}`;
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+
+        } catch (error) {
+            console.error("Erro na inicialização:", error);
+            status.style.color = "#ef4444";
+            status.innerText = `Falha ao iniciar: ${error.message}`;
+        }
+    }
+</script>
+
+</body>
+</html>
